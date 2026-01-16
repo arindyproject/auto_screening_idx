@@ -99,7 +99,8 @@ class StockAnalyzer:
         self.interval = interval
         self.df = None
         self.results = {}
-    
+        
+    @st.cache_data(ttl=3600, show_spinner=True)
     def analyze(self):
         try:
             # Get stock info
