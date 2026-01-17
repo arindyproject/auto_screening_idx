@@ -5,6 +5,7 @@ import yfinance as yf
 
 import math
 
+import plotly.graph_objects as go
 
 
 
@@ -33,6 +34,96 @@ def safe_get(d, path, default="-"):
         return d
     except Exception:
         return default
+    
+# ==============================
+# Graphical Rendering
+# ==============================
+def create_stock_chart(data, title="Stock Price"):
+    """
+    data: DataFrame dengan kolom ['date', 'open', 'high', 'low', 'close', 'volume']
+    """
+    fig = go.Figure()
+    
+    # Candlestick chart
+    fig.add_trace(go.Candlestick(
+        x=data['date'],
+        open=data['open'],
+        high=data['high'],
+        low=data['low'],
+        close=data['close'],
+        name='Price',
+        increasing_line_color='#26a69a',  # Hijau
+        decreasing_line_color='#ef5350',   # Merah
+    ))
+    
+    # MA 20
+    if len(data) >= 20:
+        data['MA20'] = data['close'].rolling(window=20).mean()
+        fig.add_trace(go.Scatter(
+            x=data['date'],
+            y=data['MA20'],
+            name='MA 20',
+            line=dict(color='#FFA726', width=2),
+            opacity=0.7
+        ))
+    
+    # MA 50
+    if len(data) >= 50:
+        data['MA50'] = data['close'].rolling(window=50).mean()
+        fig.add_trace(go.Scatter(
+            x=data['date'],
+            y=data['MA50'],
+            name='MA 50',
+            line=dict(color='#42a5f5', width=2),
+            opacity=0.7
+        ))
+    
+    # Layout customization
+    fig.update_layout(
+        title=dict(
+            text=title,
+            font=dict(size=20, color='#2c3e50'),
+            x=0.5,
+            xanchor='center'
+        ),
+        template='plotly_white',
+        xaxis=dict(
+            title='Date',
+            rangeslider=dict(visible=False),
+            gridcolor='#f0f0f0'
+        ),
+        yaxis=dict(
+            title='Price',
+            gridcolor='#f0f0f0',
+            tickformat='.2f'
+        ),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        height=500,
+        margin=dict(l=50, r=50, t=80, b=50),
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    
+    fig.update_xaxes(
+        rangeselector=dict(
+            buttons=list([
+                dict(count=1, label="1M", step="month", stepmode="backward"),
+                dict(count=6, label="6M", step="month", stepmode="backward"),
+                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                dict(count=1, label="1Y", step="year", stepmode="backward"),
+                dict(step="all")
+            ])
+        )
+    )
+    
+    return fig
 
 def render_auto_recommendation(text: str):
     if not text:
@@ -82,7 +173,316 @@ def render_auto_recommendation(text: str):
     )
 
 def render_stock_result(result: dict | None, data: StockAnalyzer):
+    df = data.df.copy()
 
+
+    # ===============================
+    # PLOTLY CHARTS
+    # ===============================
+    fig_price = go.Figure()
+
+    # -------------------------------
+    # Candlestick
+    # -------------------------------
+    fig_price.add_trace(go.Candlestick(
+        x=df.index,
+        open=df['Open'],
+        high=df['High'],
+        low=df['Low'],
+        close=df['Close'],
+        name='Price'
+    ))
+
+    # -------------------------------
+    # EMA
+    # -------------------------------
+    fig_price.add_trace(go.Scatter(x=df.index, y=df['EMA_5'],  name='EMA 5'))
+    fig_price.add_trace(go.Scatter(x=df.index, y=df['EMA_9'],  name='EMA 9'))
+    fig_price.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20'))
+    fig_price.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50'))
+
+    # -------------------------------
+    # Bollinger Bands
+    # -------------------------------
+    fig_price.add_trace(go.Scatter(
+        x=df.index,
+        y=df['BB_UPPER'],
+        name='BB Upper',
+        line=dict(dash='dot')
+    ))
+    fig_price.add_trace(go.Scatter(
+        x=df.index,
+        y=df['BB_LOWER'],
+        name='BB Lower',
+        line=dict(dash='dot'),
+        fill='tonexty'
+    ))
+
+    # -------------------------------
+    # SUPPORT & RESISTANCE
+    # -------------------------------
+    support_1 = safe_get(result, "technical.support")[0]
+    support_2 = safe_get(result, "technical.support")[1]
+    resistance_1 = safe_get(result, "technical.resistance")[0]
+    resistance_2 = safe_get(result, "technical.resistance")[1]
+
+    x_range = [df.index.min(), df.index.max()]
+
+    if support_1:
+        fig_price.add_trace(go.Scatter(
+            x=x_range,
+            y=[support_1, support_1],
+            mode="lines",
+            name="Support 1",
+            line=dict(color="green", width=2, dash="dash")
+        ))
+
+    if support_2:
+        fig_price.add_trace(go.Scatter(
+            x=x_range,
+            y=[support_2, support_2],
+            mode="lines",
+            name="Support 2",
+            line=dict(color="green", width=1, dash="dot")
+        ))
+
+    if resistance_1:
+        fig_price.add_trace(go.Scatter(
+            x=x_range,
+            y=[resistance_1, resistance_1],
+            mode="lines",
+            name="Resistance",
+            line=dict(color="red", width=2, dash="dash")
+        ))
+    
+    if resistance_2:
+        fig_price.add_trace(go.Scatter(
+            x=x_range,
+            y=[resistance_2, resistance_2],
+            mode="lines",
+            name="Resistance 2",
+            line=dict(color="red", width=1, dash="dot")
+        ))
+
+    # -------------------------------
+    # Layout
+    # -------------------------------
+    fig_price.update_layout(
+        title="📈 Price Chart + EMA + Bollinger Bands + S/R",
+        height=500,
+        xaxis_rangeslider_visible=False,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+
+    st.plotly_chart(fig_price, use_container_width=True)
+
+
+    #===============================
+    # RSI CHART
+    #==============================
+    fig_rsi = go.Figure()
+
+    fig_rsi.add_trace(go.Scatter(
+        x=df.index, y=df['RSI'], name='RSI'
+    ))
+
+    # Level reference
+    fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
+    fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
+
+    fig_rsi.update_layout(
+        title="📊 RSI Indicator",
+        height=250,
+        yaxis_range=[0,100]
+    )
+
+    st.plotly_chart(fig_rsi, use_container_width=True)
+
+    # ===============================
+    # MACD CHART (Histogram Merah-Hijau)
+    # ===============================
+    df["MACD_HIST"] = df["MACD"] - df["MACD_SIGNAL"]
+
+    # Warna histogram: hijau jika >0, merah jika <0
+    hist_colors = [
+        "green" if val >= 0 else "red"
+        for val in df["MACD_HIST"]
+    ]
+
+    fig_macd = go.Figure()
+
+    # MACD Line (BIRU)
+    fig_macd.add_trace(go.Scatter(
+        x=df.index,
+        y=df["MACD"],
+        name="MACD",
+        line=dict(color="blue", width=2)
+    ))
+
+    # Signal Line (KUNING)
+    fig_macd.add_trace(go.Scatter(
+        x=df.index,
+        y=df["MACD_SIGNAL"],
+        name="Signal",
+        line=dict(color="gold", width=2, dash="dot")
+    ))
+
+    # Histogram Merah-Hijau
+    fig_macd.add_trace(go.Bar(
+        x=df.index,
+        y=df["MACD_HIST"],
+        name="Histogram",
+        marker=dict(color=hist_colors),
+        opacity=0.6
+    ))
+
+    fig_macd.update_layout(
+        title="📉 MACD Indicator",
+        height=300,
+        barmode="relative",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=20, r=20, t=40, b=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(0,0,0,0.15)",
+            zeroline=True,
+            zerolinecolor="rgba(0,0,0,0.4)"
+        )
+    )
+
+    st.plotly_chart(fig_macd, use_container_width=True)
+
+    # ===============================
+    # PRICE ACTION
+    # ===============================
+    fig = go.Figure()
+
+    # ===============================
+    # CLOSE PRICE (GARIS BIRU)
+    # ===============================
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df["Close"],
+        mode="lines",
+        name="Close",
+        line=dict(color="blue", width=2)
+    ))
+
+    # ===============================
+    # SUPPORT & RESISTANCE
+    # ===============================
+    supports = safe_get(result, "technical.support", [])
+    resistances = safe_get(result, "technical.resistance", [])
+
+    for i, s in enumerate(supports):
+        fig.add_hline(
+            y=s,
+            line=dict(
+                color="green",
+                width=1,
+                dash="dash"
+            ),
+            annotation_text=f"Support {i+1}",
+            annotation_position="left"
+        )
+
+    for i, r in enumerate(resistances):
+        fig.add_hline(
+            y=r,
+            line=dict(
+                color="red",
+                width=1,
+                dash="dash"
+            ),
+            annotation_text=f"Resistance {i+1}",
+            annotation_position="left"
+        )
+
+    # ===============================
+    # PRICE ACTION ZONES
+    # ===============================
+    zones = result.get("price_action", {}).get("zones", [])
+
+    for zone in zones:
+        zone_type = zone.get("type", "").upper()
+        low = zone.get("low")
+        high = zone.get("high")
+        zone_date = pd.to_datetime(zone.get("date"))
+
+        if not all([low, high, zone_date]):
+            continue
+
+        color = "rgba(0,180,0,0.25)" if zone_type == "DEMAND" else "rgba(220,0,0,0.2)"
+        label = "Demand Zone" if zone_type == "DEMAND" else "Supply Zone"
+
+        fig.add_shape(
+            type="rect",
+            x0=zone_date,
+            x1=df.index.max(),
+            y0=low,
+            y1=high,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
+        )
+
+        fig.add_annotation(
+            x=zone_date,
+            y=high,
+            text=f"{label}<br>{low:.0f} - {high:.0f}",
+            showarrow=False,
+            font=dict(size=10),
+            align="left"
+        )
+
+    # ===============================
+    # LAYOUT
+    # ===============================
+    fig.update_layout(
+        title="📊 Price Action + Support & Resistance",
+        height=450,
+        xaxis_title="Tanggal",
+        yaxis_title="Harga",
+        xaxis=dict(showgrid=True),
+        yaxis=dict(showgrid=True),
+        margin=dict(l=20, r=20, t=40, b=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+
+    fig_price.update_layout(template="plotly_white")
+    fig_rsi.update_layout(template="plotly_white")
+    fig_macd.update_layout(template="plotly_white")
+    fig.update_layout(template="plotly_white")
+
+    
+
+    
     st.html("""
         <style>
         /* ==============================
@@ -237,7 +637,7 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
                     <li>Market Structure : {safe_get(result, "price_action.market_structure")}</li>
                     <li>Zones : 
                         <ol>
-                            {"".join([f"<li>{zone['type']} : {zone['low']} - {zone['high']} (Date: {zone['date']})</li>" for zone in safe_get(result, "price_action.zones", [])])}
+                            {"".join([f"<li>{zone['type']} : {fmt(zone['low'])} - {fmt(zone['high'])} (Date: {zone['date']})</li>" for zone in safe_get(result, "price_action.zones", [])])}
                         </ol>
                     </li>
                     <li>Total Zones : {safe_get(result, "price_action.total_zones")}</li>
@@ -358,6 +758,8 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
                             }
                         </ul>
                     </li>
+
+                    <li>Alasan : {safe_get(result, "trading_recommendation.reason")}</li>
                 </ul>
             </div>
 
@@ -368,6 +770,8 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
     # Render Auto Recommendation
     st.divider()
     render_auto_recommendation(data.generate_recommendation())
+
+    #st.json(data.results)
 
     
     
@@ -599,7 +1003,7 @@ elif st.session_state.page == "Detail":
         try:
             with st.spinner("📡 Memproses Data....."):
                 data = analyze_stock(ticker, period, interval)
-
+            
             render_stock_result(data.results, data)
         except Exception:
             st.error("🚦 Terlalu banyak request ke Yahoo Finance. Coba lagi nanti.")
