@@ -474,11 +474,54 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
     st.plotly_chart(fig, use_container_width=True)
 
 
+    # ===============================
+    # VOLUME CHART
+    # ===============================
+    volume_colors = [
+        "green" if df["Close"].iloc[i] >= df["Open"].iloc[i] else "red"
+        for i in range(len(df))
+    ]
+
+    fig_volume = go.Figure()
+
+    fig_volume.add_trace(go.Bar(
+        x=df.index,
+        y=df["Volume"],
+        name="Volume",
+        marker=dict(color=volume_colors),
+        opacity=0.6
+    ))
+
+    fig_volume.update_layout(
+        title="📦 Volume Trading",
+        height=200,
+        margin=dict(l=20, r=20, t=40, b=20),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False),
+        yaxis=dict(
+            title="Volume",
+            showgrid=True,
+            gridcolor="rgba(0,0,0,0.15)"
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+
+    st.plotly_chart(fig_volume, use_container_width=True)
+
+
 
     fig_price.update_layout(template="plotly_white")
     fig_rsi.update_layout(template="plotly_white")
     fig_macd.update_layout(template="plotly_white")
     fig.update_layout(template="plotly_white")
+    fig_volume.update_layout(template="plotly_white")
 
     
 
