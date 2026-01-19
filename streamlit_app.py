@@ -34,6 +34,35 @@ def safe_get(d, path, default="-"):
         return d
     except Exception:
         return default
+
+@st.cache_data(ttl=3600)
+def analyze_stock_x(ticker="ANTM.JK", period="3mo", interval="1d"):
+    """
+    Fungsi utama untuk menjalankan analisis lengkap
+    
+    Parameters:
+    -----------
+    ticker : str
+        Kode saham (contoh: "ANTM.JK", "BMRI.JK")
+    period : str
+        Periode data (contoh: "1mo", "3mo", "6mo", "1y")
+    interval : str
+        Interval data (contoh: "1d", "1h", "15m")
+    """
+    # Inisialisasi analyzer
+    analyzer = StockAnalyzer(ticker=ticker, period=period, interval=interval)
+    
+    # Jalankan semua analisis
+    analyzer.info()
+    analyzer.technical_analysis()
+    analyzer.price_action_analysis()
+    analyzer.fundamental_analysis()
+    analyzer.valuation_analysis()  # Analisis baru
+    analyzer.trading_recommendation()
+    
+    # Generate laporan
+    return analyzer.results
+
     
 # ==============================
 # Graphical Rendering
@@ -818,11 +847,6 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
 
     
     
-
-
-
-
-
 # ==============================
 # PAGE CONFIG
 # ==============================
@@ -917,7 +941,46 @@ if st.session_state.page == "Home":
     st.markdown("# 📈 IDX Stock Screener")
     st.caption("Filter & eksplorasi saham IDX")
 
-    # FILTER
+    # ==============================
+    # RELOAD DATA
+    # ==============================
+    col_reload, col_space = st.columns([1, 5])
+    with col_reload:
+        if st.button("🔄 Reload Data"):
+            load_data.clear()   # clear cache @st.cache_data
+            st.rerun()
+
+    # ==============================
+    # LOAD DATA
+    # ==============================
+    try:
+        df_src = load_data()
+    except Exception:
+        st.error("❌ Gagal memuat data idx_list.csv")
+        st.stop()
+
+    # ==============================
+    # SAFE COLUMN DEFAULT
+    # ==============================
+    safe_cols = [
+        "Kode",
+        "info_sector",
+        "info_category",
+        "trading_recommendation"
+    ]
+
+    for col in safe_cols:
+        if col not in df_src.columns:
+            df_src[col] = None
+
+    # NULL → aman untuk UI
+    df_src["info_sector"] = df_src["info_sector"].fillna("Unknown")
+    df_src["info_category"] = df_src["info_category"].fillna("Unknown")
+    df_src["trading_recommendation"] = df_src["trading_recommendation"].fillna("Unknown")
+
+    # ==============================
+    # FILTER UI
+    # ==============================
     with st.container(border=True):
         st.subheader("🔍 Filter Saham")
 
@@ -926,90 +989,121 @@ if st.session_state.page == "Home":
         with col1:
             sector = st.selectbox(
                 "Sector",
-                ["All"] + sorted(df["info_sector"].dropna().unique())
+                ["All"] + sorted(df_src["info_sector"].unique())
             )
 
         with col2:
             category = st.selectbox(
                 "Category",
-                ["All"] + sorted(df["info_category"].dropna().unique())
+                ["All"] + sorted(df_src["info_category"].unique())
             )
 
         with col3:
             recommendation = st.selectbox(
                 "Recommendation",
-                ["All"] + sorted(df["trading_recommendation"].dropna().unique())
+                ["All"] + sorted(df_src["trading_recommendation"].unique())
             )
 
-    # FILTER LOGIC
-    filtered_df = df.copy()
+    # ==============================
+    # FILTER LOGIC (NULL SAFE)
+    # ==============================
+    filtered_df = df_src.copy()
 
     if sector != "All":
         filtered_df = filtered_df[filtered_df["info_sector"] == sector]
+
     if category != "All":
         filtered_df = filtered_df[filtered_df["info_category"] == category]
-    if recommendation != "All":
-        filtered_df = filtered_df[filtered_df["trading_recommendation"] == recommendation]
 
+    if recommendation != "All":
+        filtered_df = filtered_df[
+            filtered_df["trading_recommendation"] == recommendation
+        ]
+
+    # ==============================
     # METRICS
+    # ==============================
     col1, col2, col3 = st.columns(3)
+
     col1.metric("📊 Total Saham", len(filtered_df))
-    col2.metric("🏭 Sector", filtered_df["info_sector"].nunique())
-    col3.metric("⭐ Rekomendasi", filtered_df["trading_recommendation"].nunique())
+
+    col2.metric(
+        "🏭 Sector",
+        filtered_df["info_sector"].nunique()
+        if not filtered_df.empty else 0
+    )
+
+    col3.metric(
+        "⭐ Rekomendasi",
+        filtered_df["trading_recommendation"].nunique()
+        if not filtered_df.empty else 0
+    )
 
     st.divider()
 
     # ==============================
-    # TABLE + FIXED DETAIL COLUMN
+    # TABLE + DETAIL
     # ==============================
     st.subheader("📋 Daftar Saham")
 
-    table_df = filtered_df.copy()
+    if filtered_df.empty:
+        st.warning("⚠️ Tidak ada data sesuai filter")
+    else:
+        table_df = filtered_df.copy()
+        table_df["🔎 Detail"] = False
 
-    # Tambahkan kolom Detail
-    table_df["🔎 Detail"] = False
+        column_order = ["🔎 Detail"] + [
+            c for c in table_df.columns if c != "🔎 Detail"
+        ]
 
-    # Urutan kolom: Detail di depan
-    column_order = ["🔎 Detail"] + [c for c in table_df.columns if c != "🔎 Detail"]
+        edited_df = st.data_editor(
+            table_df,
+            hide_index=True,
+            width="stretch",
+            height=500,
+            column_order=column_order,
+            column_config={
+                "🔎 Detail": st.column_config.CheckboxColumn(
+                    "Detail",
+                    help="Klik untuk melihat detail saham",
+                    width="small"
+                )
+            },
+            disabled=[c for c in table_df.columns if c != "🔎 Detail"],
+        )
 
-    edited_df = st.data_editor(
-        table_df,
-        hide_index=True,
-        use_container_width=True,
-        height=500,
-        column_order=column_order,
-        column_config={
-            "🔎 Detail": st.column_config.CheckboxColumn(
-                "Detail",
-                help="Klik untuk melihat detail saham",
-                width="small"
-            )
-        },
-        disabled=[c for c in table_df.columns if c != "🔎 Detail"],
-    )
+        # ==============================
+        # HANDLE CLICK DETAIL (SAFE)
+        # ==============================
+        clicked = edited_df[edited_df["🔎 Detail"] == True]
+
+        if not clicked.empty:
+            ticker = clicked.iloc[0].get("Kode")
+
+            if pd.notna(ticker):
+                st.session_state.selected_ticker = ticker
+                st.session_state.page = "Detail"
+                st.rerun()
+            else:
+                st.warning("⚠️ Kode saham tidak valid")
 
     # ==============================
-    # HANDLE CLICK
+    # DOWNLOAD CSV
     # ==============================
-    clicked = edited_df[edited_df["🔎 Detail"] == True]
-
-    if not clicked.empty:
-        ticker = clicked.iloc[0]["Kode"]  # pastikan nama kolom benar
-        st.session_state.selected_ticker = ticker
-        st.session_state.page = "Detail"
-        st.rerun()
-
-
-    # DOWNLOAD
     st.subheader("⬇️ Download Data")
-    csv = filtered_df.to_csv(index=False).encode("utf-8")
 
-    st.download_button(
-        "⬇️ Download CSV",
-        csv,
-        "idx_stock_screener.csv",
-        "text/csv"
-    )
+    if not filtered_df.empty:
+        csv = filtered_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Download CSV",
+            csv,
+            "idx_stock_screener.csv",
+            "text/csv"
+        )
+    else:
+        st.info("Tidak ada data untuk di-download")
+
+
 
 # ==============================
 # DETAIL
@@ -1056,23 +1150,122 @@ elif st.session_state.page == "Detail":
 # ==============================
 elif menu == "🔄 Update":
     st.markdown("# 🔄 Update Data")
-    st.caption("Perbarui data saham dari sumber eksternal")
+    st.caption("Perbarui data saham dari Yahoo Finance")
 
     with st.container(border=True):
         with st.form("update_form"):
-            col1, col2, col3 = st.columns([3, 3, 1])
-
+            col0, col1, col2, col3 = st.columns([3,3, 3, 1])
+            with col0:
+                total_stocks = st.number_input(
+                    "Total Saham yang Ingin Diproses",
+                    min_value=1,
+                    max_value=1000,
+                    value=950,
+                    step=1
+                )
             with col1:
-                period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"])
+                period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2)
 
             with col2:
-                interval = st.selectbox("Interval", ["1d", "1wk"])
+                interval = st.selectbox("Interval", ["1d", "1wk"], index=0)
 
             with col3:
                 update_btn = st.form_submit_button("🔄 Update")
 
     if update_btn:
-        st.success("✅ Data berhasil diperbarui (simulasi)")
+        try:
+            with st.spinner("📡 Mengambil & menganalisis data saham..."):
+                idx_url = "https://raw.githubusercontent.com/wildangunawan/Dataset-Saham-IDX/master/List%20Emiten/all.csv"
+
+                idx = pd.read_csv(idx_url).head(total_stocks)
+                tickers = idx["code"].dropna().unique()
+                tickers = [f"{t}.JK" for t in tickers]
+
+                results = []
+                progress = st.progress(0)
+
+                for i, ticker in enumerate(tickers):
+                    try:
+                        data = analyze_stock_x(
+                            ticker=ticker,
+                            period=period,
+                            interval=interval
+                        )
+                        results.append({
+                            "Kode": ticker,
+
+                            "info_longName": data["info"].get("longName"),
+                            "info_sector": data["info"].get("sector"),
+                            "info_industry": data["info"].get("industry"),
+                            "info_marketCap": data["info"].get("marketCap"),
+                            "info_category": data["info"].get("category"),
+
+                            "trading_recommendation": data["trading_recommendation"].get("status"),
+
+                            "technical_trend": data["technical"].get("trend"),
+                            "technical_momentum": data["technical"].get("momentum"),
+                            "technical_signal": data["technical"].get("signal"),
+
+                            "price_action_market_structure": data["price_action"].get("market_structure"),
+                            "price_action_market_total_zones": data["price_action"].get("total_zones"),
+
+                            "fundamental_score": data["fundamental"].get("score"),
+                            "fundamental_rating": data["fundamental"].get("rating"),
+
+                            "valuation_score": data["valuation"].get("valuation_score"),
+                            "valuation_conclusion": data["valuation"].get("valuation_conclusion"),
+                            "valuation_reason": data["valuation"].get("valuation_reason"),
+                            "valuation_notes": "|".join(
+                                data["valuation"].get("valuation_notes", [])
+                            ),
+
+                            "info_website": data["info"].get("website"),
+                        })
+
+                    except Exception as e:
+                        # Jika error per saham → tetap lanjut
+                        results.append({
+                            "Kode": ticker,
+
+                            "technical_trend": None,
+                            "technical_momentum": None,
+                            "technical_signal": None,
+
+                            "price_action_market_structure": None,
+                            "price_action_market_total_zones": None,
+
+                            "fundamental_score": None,
+                            "fundamental_rating": None,
+
+                            "valuation_score": None,
+                            "valuation_conclusion": None,
+                            "valuation_reason": None,
+                            "valuation_notes": None,
+                        })
+
+                        st.warning(f"⚠️ {ticker} gagal diproses")
+
+                    progress.progress((i + 1) / len(tickers))
+
+                screened = pd.DataFrame(results)
+
+                df_sorted = screened.sort_values(
+                    by="fundamental_score",
+                    ascending=False
+                )
+
+                df_sorted.to_csv("idx_list.csv", index=False)
+
+            st.success("✅ Update selesai! Data tersimpan ke idx_list.csv")
+
+            # Preview hasil
+            st.subheader("📊 Preview Top 20 Saham")
+            st.dataframe(df_sorted.head(20), use_container_width=True)
+
+        except Exception as e:
+            st.error("🚦 Terlalu banyak request ke Yahoo Finance. Coba lagi nanti.")
+            st.caption(str(e))
+
 
 # ==============================
 # ABOUT
