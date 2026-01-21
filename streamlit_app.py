@@ -875,11 +875,7 @@ def create_sankey_chart(stock_analysis):
         reverse=True
     )
 
-    selected_year = st.selectbox(
-        "📅 Pilih Tahun Laporan",
-        years,
-        index=0
-    )
+    selected_year = years[0]
 
     # Ambil kolom sesuai tahun
     col_idx = [
@@ -949,7 +945,7 @@ def create_sankey_chart(stock_analysis):
                 "#2ECC71", "#E74C3C", "#2ECC71", "#E74C3C",
                 "#2ECC71", "#E74C3C", "#E74C3C", "#2ECC71"
             ],
-            line=dict(color="rgba(0,0,0,0.3)", width=0.5)
+            line=dict(color="rgba(243, 247, 12, 0.3)", width=0.5)
         ),
         link=dict(
             source=[0, 0, 2, 2, 4, 4, 4],
