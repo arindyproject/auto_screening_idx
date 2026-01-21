@@ -1008,47 +1008,37 @@ def plot_balance_sheet_sankey(stock_analysis):
     fin = stock_analysis.balance.copy()
 
     # =============================
-    # AMBIL DAFTAR TAHUN
+    # AMBIL TAHUN TERBARU
     # =============================
-    years = sorted(
-        [col.year for col in fin.columns],
-        reverse=True
-    )
-
-    selected_year = st.selectbox(
-        "📅 Pilih Tahun Balance Sheet",
-        years,
-        index=0
-    )
+    years = sorted([c.year for c in fin.columns], reverse=True)
+    selected_year = years[0]
 
     col = [c for c in fin.columns if c.year == selected_year][0]
     latest = fin[col].fillna(0)
 
-    # =============================
-    # HELPER AMBIL NILAI
-    # =============================
-    def val(key):
-        return float(latest.get(key, 0))
+    def val(k):
+        return float(latest.get(k, 0))
 
     # =============================
-    # AMBIL DATA BALANCE SHEET
+    # AMBIL DATA UTAMA
     # =============================
-    current_assets = val("Total Current Assets")
+    current_assets = val("Current Assets")
     non_current_assets = val("Total Non Current Assets")
 
-    current_liabilities = val("Total Current Liabilities")
-    long_term_liabilities = val("Total Non Current Liabilities")
+    total_assets = val("Total Assets")
 
-    equity = val("Total Stockholder Equity")
+    current_liabilities = val("Current Liabilities")
+    non_current_liabilities = val("Total Non Current Liabilities Net Minority Interest")
 
-    total_assets = current_assets + non_current_assets
-    total_lieq = current_liabilities + long_term_liabilities + equity
+    equity = val("Stockholders Equity")
+    minority_interest = val("Minority Interest")
 
     # =============================
     # VALIDASI AKUNTANSI
     # =============================
-    if abs(total_assets - total_lieq) > 1:
-        st.warning("⚠️ Assets ≠ Liabilities + Equity (data tidak balance)")
+    rhs = current_liabilities + non_current_liabilities + equity + minority_interest
+    if abs(total_assets - rhs) > 1e6:
+        st.warning("⚠️ Assets ≠ Liabilities + Equity (selisih material)")
 
     # =============================
     # LABEL
@@ -1062,15 +1052,16 @@ def plot_balance_sheet_sankey(stock_analysis):
         label("Non-Current Assets", non_current_assets),
         label("Total Assets", total_assets),
         label("Current Liabilities", current_liabilities),
-        label("Long-Term Liabilities", long_term_liabilities),
+        label("Non-Current Liabilities", non_current_liabilities),
+        label("Minority Interest", minority_interest),
         label("Equity", equity),
     ]
 
     # =============================
-    # NODE POSITION (ANTI TABRAKAN)
+    # POSISI NODE (ANTI TABRAKAN)
     # =============================
-    x = [0.0, 0.0, 0.4, 0.8, 0.8, 0.8]
-    y = [0.65, 0.35, 0.50, 0.70, 0.40, 0.15]
+    x = [0.0, 0.0, 0.45, 0.9, 0.9, 0.9, 0.9]
+    y = [0.65, 0.30, 0.50, 0.75, 0.50, 0.30, 0.10]
 
     # =============================
     # SANKEY
@@ -1078,7 +1069,7 @@ def plot_balance_sheet_sankey(stock_analysis):
     fig = go.Figure(go.Sankey(
         arrangement="fixed",
         node=dict(
-            pad=35,
+            pad=38,
             thickness=22,
             x=x,
             y=y,
@@ -1088,19 +1079,21 @@ def plot_balance_sheet_sankey(stock_analysis):
                 "#5DADE2",  # NCA
                 "#2ECC71",  # Total Assets
                 "#E74C3C",  # CL
-                "#C0392B",  # LTL
+                "#C0392B",  # NCL
+                "#F39C12",  # Minority
                 "#27AE60",  # Equity
             ],
-            line=dict(color="gray", width=0.5)
+            line=dict(color="rgba(0,0,0,0.3)", width=0.5)
         ),
         link=dict(
-            source=[0, 1, 2, 2, 2],
-            target=[2, 2, 3, 4, 5],
+            source=[0, 1, 2, 2, 2, 2],
+            target=[2, 2, 3, 4, 5, 6],
             value=[
                 current_assets,
                 non_current_assets,
                 current_liabilities,
-                long_term_liabilities,
+                non_current_liabilities,
+                minority_interest,
                 equity,
             ],
             color=[
@@ -1108,18 +1101,16 @@ def plot_balance_sheet_sankey(stock_analysis):
                 "rgba(93,173,226,0.55)",
                 "rgba(231,76,60,0.55)",
                 "rgba(192,57,43,0.55)",
+                "rgba(243,156,18,0.55)",
                 "rgba(39,174,96,0.55)",
             ]
         )
     ))
 
-    # =============================
-    # LAYOUT
-    # =============================
     fig.update_layout(
         title=f"Balance Sheet Sankey – {stock_analysis.ticker} ({selected_year})",
+        height=650,
         font=dict(size=12),
-        height=620,
         margin=dict(l=30, r=30, t=70, b=30)
     )
 
