@@ -843,6 +843,10 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
     st.divider()
     create_sankey_chart(data)
 
+    # cash flow sankey
+    st.divider()
+    plot_cash_flow_sankey(data)
+
     # balance sheet sankey
     st.divider()
     plot_balance_sheet_sankey(data)
@@ -1132,6 +1136,160 @@ def plot_balance_sheet_sankey(stock_analysis):
         font=dict(size=14, family="Arial"),
         height=720,
         margin=dict(l=60, r=60, t=90, b=60),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==============================
+# Sankey Cash Flow
+# ==============================
+def plot_cash_flow_sankey(stock_analysis):
+
+    # =============================
+    # VALIDASI DATA
+    # =============================
+    if (
+        stock_analysis is None
+        or stock_analysis.cashflow is None
+        or stock_analysis.cashflow.empty
+    ):
+        st.warning("⚠️ Data cashflow tidak tersedia")
+        return
+
+    fin = stock_analysis.cashflow.copy()
+
+    # =============================
+    # AMBIL TAHUN TERBARU
+    # =============================
+    years = sorted([c.year for c in fin.columns], reverse=True)
+    selected_year = years[0]
+
+    col = [c for c in fin.columns if c.year == selected_year][0]
+    latest = fin[col].fillna(0)
+
+    def val(k):
+        return float(latest.get(k, 0))
+
+    # =============================
+    # DATA UTAMA
+    # =============================
+    operating_cf = val("Operating Cash Flow")
+    investing_cf = val("Investing Cash Flow")
+    financing_cf = val("Financing Cash Flow")
+
+    net_change = val("Changes In Cash")
+    beginning_cash = val("Beginning Cash Position")
+    ending_cash = val("End Cash Position")
+
+    if operating_cf == 0 and net_change == 0:
+        st.warning("⚠️ Data cashflow tidak cukup untuk visualisasi")
+        return
+
+    # =============================
+    # LABEL
+    # =============================
+    def label(name, value):
+        sign = "+" if value >= 0 else ""
+        return (
+            f"<b>{name}</b><br><br>"
+            f"{sign}{value/1e12:.2f} T"
+        )
+
+    labels = [
+        label("Beginning Cash", beginning_cash),
+        label("Operating Cash Flow", operating_cf),
+        label("Investing Cash Flow", investing_cf),
+        label("Financing Cash Flow", financing_cf),
+        label("Net Change in Cash", net_change),
+        label("Ending Cash", ending_cash),
+    ]
+
+    # =============================
+    # POSISI NODE (ANTI TABRAKAN)
+    # =============================
+    x = [
+        0.05,  # Beginning Cash
+        0.30,  # Operating
+        0.30,  # Investing
+        0.30,  # Financing
+        0.65,  # Net Change
+        0.90,  # Ending Cash
+    ]
+
+    y = [
+        0.50,  # Beginning
+        0.15,  # Operating (atas)
+        0.45,  # Investing (tengah)
+        0.75,  # Financing (bawah)
+        0.50,  # Net Change
+        0.50,  # Ending
+    ]
+
+    # =============================
+    # SANKEY
+    # =============================
+    fig = go.Figure(go.Sankey(
+        arrangement="fixed",
+        node=dict(
+            pad=65,
+            thickness=26,
+            x=x,
+            y=y,
+            label=labels,
+            color=[
+                "#5DADE2",  # Beginning Cash
+                "#2ECC71",  # Operating (hijau)
+                "#F39C12",  # Investing (oranye)
+                "#E74C3C",  # Financing (merah)
+                "#3498DB",  # Net Change (biru)
+                "#1ABC9C",  # Ending Cash
+            ],
+            line=dict(color="rgba(0,0,0,0.4)", width=0.6)
+        ),
+        link=dict(
+            source=[
+                0,  # Beginning -> Net Change
+                1,  # Operating -> Net Change
+                2,  # Investing -> Net Change
+                3,  # Financing -> Net Change
+                4,  # Net Change -> Ending
+            ],
+            target=[
+                4,
+                4,
+                4,
+                4,
+                5,
+            ],
+            value=[
+                abs(beginning_cash),
+                abs(operating_cf),
+                abs(investing_cf),
+                abs(financing_cf),
+                abs(ending_cash),
+            ],
+            color=[
+                "rgba(93,173,226,0.45)",  # Beginning
+                "rgba(46,204,113,0.55)",  # Operating
+                "rgba(243,156,18,0.55)",  # Investing
+                "rgba(231,76,60,0.55)",   # Financing
+                "rgba(26,188,156,0.60)",  # Ending
+            ]
+        )
+    ))
+
+    # =============================
+    # LAYOUT
+    # =============================
+    fig.update_layout(
+        title=dict(
+            text=f"<b>Cash Flow Sankey</b> – {stock_analysis.ticker} ({selected_year})",
+            x=0.5,
+            font=dict(size=20)
+        ),
+        font=dict(size=14, family="Arial"),
+        height=720,
+        margin=dict(l=60, r=60, t=90, b=60)
     )
 
     st.plotly_chart(fig, use_container_width=True)
