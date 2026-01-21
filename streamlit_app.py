@@ -843,6 +843,10 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
     st.divider()
     create_sankey_chart(data)
 
+    # balance sheet sankey
+    st.divider()
+    plot_balance_sheet_sankey(data)
+
     # Render Auto Recommendation
     st.divider()
     render_auto_recommendation(data.generate_recommendation())
@@ -851,7 +855,7 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
 
 
 # ==============================
-# SANKEY CHART
+# SANKEY Income Statement
 # ==============================
 def create_sankey_chart(stock_analysis):
     """
@@ -985,7 +989,142 @@ def create_sankey_chart(stock_analysis):
     # RENDER
     # =============================
     st.plotly_chart(fig, use_container_width=True)
-    
+
+# ==============================
+# SANKEY Balens   
+# ==============================
+def plot_balance_sheet_sankey(stock_analysis):
+    # =============================
+    # VALIDASI DATA
+    # =============================
+    if (
+        stock_analysis is None
+        or stock_analysis.balance is None
+        or stock_analysis.balance.empty
+    ):
+        st.warning("⚠️ Data balance_sheet tidak tersedia")
+        return
+
+    fin = stock_analysis.balance.copy()
+
+    # =============================
+    # AMBIL DAFTAR TAHUN
+    # =============================
+    years = sorted(
+        [col.year for col in fin.columns],
+        reverse=True
+    )
+
+    selected_year = st.selectbox(
+        "📅 Pilih Tahun Balance Sheet",
+        years,
+        index=0
+    )
+
+    col = [c for c in fin.columns if c.year == selected_year][0]
+    latest = fin[col].fillna(0)
+
+    # =============================
+    # HELPER AMBIL NILAI
+    # =============================
+    def val(key):
+        return float(latest.get(key, 0))
+
+    # =============================
+    # AMBIL DATA BALANCE SHEET
+    # =============================
+    current_assets = val("Total Current Assets")
+    non_current_assets = val("Total Non Current Assets")
+
+    current_liabilities = val("Total Current Liabilities")
+    long_term_liabilities = val("Total Non Current Liabilities")
+
+    equity = val("Total Stockholder Equity")
+
+    total_assets = current_assets + non_current_assets
+    total_lieq = current_liabilities + long_term_liabilities + equity
+
+    # =============================
+    # VALIDASI AKUNTANSI
+    # =============================
+    if abs(total_assets - total_lieq) > 1:
+        st.warning("⚠️ Assets ≠ Liabilities + Equity (data tidak balance)")
+
+    # =============================
+    # LABEL
+    # =============================
+    def label(name, value):
+        pct = (value / total_assets * 100) if total_assets else 0
+        return f"{name}<br>{value/1e12:.2f} T<br>({pct:.1f}%)"
+
+    labels = [
+        label("Current Assets", current_assets),
+        label("Non-Current Assets", non_current_assets),
+        label("Total Assets", total_assets),
+        label("Current Liabilities", current_liabilities),
+        label("Long-Term Liabilities", long_term_liabilities),
+        label("Equity", equity),
+    ]
+
+    # =============================
+    # NODE POSITION (ANTI TABRAKAN)
+    # =============================
+    x = [0.0, 0.0, 0.4, 0.8, 0.8, 0.8]
+    y = [0.65, 0.35, 0.50, 0.70, 0.40, 0.15]
+
+    # =============================
+    # SANKEY
+    # =============================
+    fig = go.Figure(go.Sankey(
+        arrangement="fixed",
+        node=dict(
+            pad=35,
+            thickness=22,
+            x=x,
+            y=y,
+            label=labels,
+            color=[
+                "#3498DB",  # CA
+                "#5DADE2",  # NCA
+                "#2ECC71",  # Total Assets
+                "#E74C3C",  # CL
+                "#C0392B",  # LTL
+                "#27AE60",  # Equity
+            ],
+            line=dict(color="gray", width=0.5)
+        ),
+        link=dict(
+            source=[0, 1, 2, 2, 2],
+            target=[2, 2, 3, 4, 5],
+            value=[
+                current_assets,
+                non_current_assets,
+                current_liabilities,
+                long_term_liabilities,
+                equity,
+            ],
+            color=[
+                "rgba(52,152,219,0.55)",
+                "rgba(93,173,226,0.55)",
+                "rgba(231,76,60,0.55)",
+                "rgba(192,57,43,0.55)",
+                "rgba(39,174,96,0.55)",
+            ]
+        )
+    ))
+
+    # =============================
+    # LAYOUT
+    # =============================
+    fig.update_layout(
+        title=f"Balance Sheet Sankey – {stock_analysis.ticker} ({selected_year})",
+        font=dict(size=12),
+        height=620,
+        margin=dict(l=30, r=30, t=70, b=30)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 # ==============================
 # PAGE CONFIG
 # ==============================

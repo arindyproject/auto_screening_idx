@@ -37,7 +37,7 @@ class StockAnalyzer:
         }
 
         self.financials = None
-        self.balance_sheet = None
+        self.balance = None
         self.cashflow = None
 
     # ===========================================
