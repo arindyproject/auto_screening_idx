@@ -980,7 +980,7 @@ def create_sankey_chart(stock_analysis):
             text=f"Income Flow Sankey – {company_name} ({selected_year})",
             x=0.5
         ),
-        font=dict(size=12),
+        font=dict(size=14, family="Arial"),
         height=620,
         margin=dict(l=30, r=30, t=70, b=30)
     )
@@ -994,9 +994,7 @@ def create_sankey_chart(stock_analysis):
 # SANKEY Balens   
 # ==============================
 def plot_balance_sheet_sankey(stock_analysis):
-    import plotly.graph_objects as go
-    import streamlit as st
-
+ 
     # =============================
     # VALIDASI DATA
     # =============================
@@ -1039,7 +1037,11 @@ def plot_balance_sheet_sankey(stock_analysis):
     # =============================
     def label(name, value):
         pct = (value / total_assets * 100) if total_assets else 0
-        return f"<b>{name}</b><br>{value/1e12:.2f} T<br>({pct:.1f}%)"
+        return (
+            f"<b>{name}</b><br><br>"      # ⬅️ spasi ekstra
+            f"{value/1e12:.2f} T<br>"
+            f"({pct:.1f}%)"
+        )
 
     labels = [
         label("Current Assets", current_assets),
@@ -1065,13 +1067,13 @@ def plot_balance_sheet_sankey(stock_analysis):
     ]
 
     y = [
-        0.70,  # CA (bawah)
-        0.25,  # NCA (atas)
-        0.48,  # Total Assets (tengah)
-        0.78,  # CL
-        0.55,  # NCL
-        0.32,  # Minority
-        0.12,  # Equity (paling atas)
+        0.78,  # Current Assets
+        0.18,  # Non-Current Assets
+        0.48,  # Total Assets
+        0.88,  # Current Liabilities
+        0.62,  # Non-Current Liabilities
+        0.36,  # Minority Interest
+        0.10,  # Equity
     ]
 
     # =============================
@@ -1129,7 +1131,7 @@ def plot_balance_sheet_sankey(stock_analysis):
         ),
         font=dict(size=14, family="Arial"),
         height=720,
-        margin=dict(l=40, r=40, t=80, b=40)
+        margin=dict(l=60, r=60, t=90, b=60),
     )
 
     st.plotly_chart(fig, use_container_width=True)
