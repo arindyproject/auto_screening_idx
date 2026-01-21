@@ -203,7 +203,7 @@ def render_auto_recommendation(text: str):
 
 def render_stock_result(result: dict | None, data: StockAnalyzer):
     df = data.df.copy()
-
+    st.subheader(f"📊 {safe_get(result,'info.longName')} ({safe_get(result,'code')})")
 
     # ===============================
     # PLOTLY CHARTS
@@ -648,7 +648,7 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
 
 
 
-    st.subheader(f"📊 {safe_get(result,'info.longName')} ({safe_get(result,'code')})")
+    
 
     st.html(
         f"""
