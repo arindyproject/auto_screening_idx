@@ -36,6 +36,10 @@ class StockAnalyzer:
             }
         }
 
+        self.financials = None
+        self.balance_sheet = None
+        self.cashflow = None
+
     # ===========================================
     # 0. INFO
     # ===========================================
@@ -325,9 +329,9 @@ class StockAnalyzer:
             self.stock_info = stock.info
             
             # Data keuangan
-            financials = stock.financials
-            balance = stock.balance_sheet
-            cashflow = stock.cashflow
+            self.financials = stock.financials
+            self.balance = stock.balance_sheet
+            self.cashflow = stock.cashflow
             
             # Helper function
             def safe_get(df, key):
@@ -345,12 +349,12 @@ class StockAnalyzer:
                     return None
             
             # Extract data - gunakan try-except untuk setiap nilai
-            net_income = safe_get(financials, "Net Income") if financials is not None else None
-            total_assets = safe_get(balance, "Total Assets") if balance is not None else None
-            total_equity = safe_get(balance, "Total Stockholder Equity") if balance is not None else None
-            total_debt = safe_get(balance, "Total Debt") if balance is not None else None
-            operating_cf = safe_get(cashflow, "Total Cash From Operating Activities") if cashflow is not None else None
-            revenue = safe_get(financials, "Total Revenue") if financials is not None else None
+            net_income = safe_get(self.financials, "Net Income") if self.financials is not None else None
+            total_assets = safe_get(self.balance, "Total Assets") if self.balance is not None else None
+            total_equity = safe_get(self.balance, "Total Stockholder Equity") if self.balance is not None else None
+            total_debt = safe_get(self.balance, "Total Debt") if self.balance is not None else None
+            operating_cf = safe_get(self.cashflow, "Total Cash From Operating Activities") if self.cashflow is not None else None
+            revenue = safe_get(self.financials, "Total Revenue") if self.financials is not None else None
             
             # Konversi ke float jika ada
             def to_float(value):
