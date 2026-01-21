@@ -994,6 +994,9 @@ def create_sankey_chart(stock_analysis):
 # SANKEY Balens   
 # ==============================
 def plot_balance_sheet_sankey(stock_analysis):
+    import plotly.graph_objects as go
+    import streamlit as st
+
     # =============================
     # VALIDASI DATA
     # =============================
@@ -1020,32 +1023,23 @@ def plot_balance_sheet_sankey(stock_analysis):
         return float(latest.get(k, 0))
 
     # =============================
-    # AMBIL DATA UTAMA
+    # DATA UTAMA
     # =============================
     current_assets = val("Current Assets")
     non_current_assets = val("Total Non Current Assets")
-
     total_assets = val("Total Assets")
 
     current_liabilities = val("Current Liabilities")
     non_current_liabilities = val("Total Non Current Liabilities Net Minority Interest")
-
-    equity = val("Stockholders Equity")
     minority_interest = val("Minority Interest")
-
-    # =============================
-    # VALIDASI AKUNTANSI
-    # =============================
-    rhs = current_liabilities + non_current_liabilities + equity + minority_interest
-    if abs(total_assets - rhs) > 1e6:
-        st.warning("⚠️ Assets ≠ Liabilities + Equity (selisih material)")
+    equity = val("Stockholders Equity")
 
     # =============================
     # LABEL
     # =============================
     def label(name, value):
         pct = (value / total_assets * 100) if total_assets else 0
-        return f"{name}<br>{value/1e12:.2f} T<br>({pct:.1f}%)"
+        return f"<b>{name}</b><br>{value/1e12:.2f} T<br>({pct:.1f}%)"
 
     labels = [
         label("Current Assets", current_assets),
@@ -1058,10 +1052,27 @@ def plot_balance_sheet_sankey(stock_analysis):
     ]
 
     # =============================
-    # POSISI NODE (ANTI TABRAKAN)
+    # POSISI NODE (ANTI TABRAKAN TOTAL)
     # =============================
-    x = [0.0, 0.0, 0.45, 0.9, 0.9, 0.9, 0.9]
-    y = [0.65, 0.30, 0.50, 0.75, 0.50, 0.30, 0.10]
+    x = [
+        0.05,  # CA
+        0.05,  # NCA
+        0.45,  # TOTAL ASSETS
+        0.90,  # CL
+        0.90,  # NCL
+        0.90,  # Minority
+        0.90,  # Equity
+    ]
+
+    y = [
+        0.70,  # CA (bawah)
+        0.25,  # NCA (atas)
+        0.48,  # Total Assets (tengah)
+        0.78,  # CL
+        0.55,  # NCL
+        0.32,  # Minority
+        0.12,  # Equity (paling atas)
+    ]
 
     # =============================
     # SANKEY
@@ -1069,21 +1080,21 @@ def plot_balance_sheet_sankey(stock_analysis):
     fig = go.Figure(go.Sankey(
         arrangement="fixed",
         node=dict(
-            pad=38,
-            thickness=22,
+            pad=45,               # jarak antar node BESAR
+            thickness=26,         # node lebih tebal
             x=x,
             y=y,
             label=labels,
             color=[
-                "#3498DB",  # CA
-                "#5DADE2",  # NCA
-                "#2ECC71",  # Total Assets
-                "#E74C3C",  # CL
-                "#C0392B",  # NCL
-                "#F39C12",  # Minority
-                "#27AE60",  # Equity
+                "#1F77B4",  # CA (biru)
+                "#AEC7E8",  # NCA (biru muda)
+                "#2ECC71",  # Total Assets (hijau)
+                "#E74C3C",  # CL (merah)
+                "#C0392B",  # NCL (merah gelap)
+                "#F39C12",  # Minority (oranye)
+                "#27AE60",  # Equity (hijau tua)
             ],
-            line=dict(color="rgba(0,0,0,0.3)", width=0.5)
+            line=dict(color="rgba(0,0,0,0.4)", width=0.6)
         ),
         link=dict(
             source=[0, 1, 2, 2, 2, 2],
@@ -1097,24 +1108,32 @@ def plot_balance_sheet_sankey(stock_analysis):
                 equity,
             ],
             color=[
-                "rgba(52,152,219,0.55)",
-                "rgba(93,173,226,0.55)",
-                "rgba(231,76,60,0.55)",
-                "rgba(192,57,43,0.55)",
-                "rgba(243,156,18,0.55)",
-                "rgba(39,174,96,0.55)",
+                "rgba(31,119,180,0.45)",  # CA
+                "rgba(174,199,232,0.45)", # NCA
+                "rgba(231,76,60,0.50)",   # CL
+                "rgba(192,57,43,0.50)",   # NCL
+                "rgba(243,156,18,0.55)",  # Minority
+                "rgba(39,174,96,0.55)",   # Equity
             ]
         )
     ))
 
+    # =============================
+    # LAYOUT
+    # =============================
     fig.update_layout(
-        title=f"Balance Sheet Sankey – {stock_analysis.ticker} ({selected_year})",
-        height=650,
-        font=dict(size=12),
-        margin=dict(l=30, r=30, t=70, b=30)
+        title=dict(
+            text=f"<b>Balance Sheet Sankey</b> – {stock_analysis.ticker} ({selected_year})",
+            x=0.5,
+            font=dict(size=20)
+        ),
+        font=dict(size=14, family="Arial"),
+        height=720,
+        margin=dict(l=40, r=40, t=80, b=40)
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 # ==============================
 # PAGE CONFIG
