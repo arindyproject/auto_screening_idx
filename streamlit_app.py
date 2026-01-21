@@ -838,6 +838,10 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
         </div>
         """
         )
+    
+    # sankey chart
+    st.divider()
+    create_sankey_chart(data)
 
     # Render Auto Recommendation
     st.divider()
@@ -851,19 +855,48 @@ def render_stock_result(result: dict | None, data: StockAnalyzer):
 # ==============================
 def create_sankey_chart(stock_analysis):
     """
-    Menampilkan Sankey Chart Income Statement menggunakan Plotly + Streamlit
+    Sankey Chart Income Statement + Pilihan Tahun
     """
 
     # =============================
-    # LOAD DATA
+    # VALIDASI DATA
     # =============================
-    latest = stock_analysis.financials.iloc[:, 0].fillna(0)
+    if stock_analysis.financials is None or stock_analysis.financials.empty:
+        st.warning("⚠️ Data financial tidak tersedia")
+        return
+
+    fin = stock_analysis.financials.copy()
+
+    # =============================
+    # AMBIL DAFTAR TAHUN
+    # =============================
+    years = sorted(
+        [col.year for col in fin.columns],
+        reverse=True
+    )
+
+    selected_year = st.selectbox(
+        "📅 Pilih Tahun Laporan",
+        years,
+        index=0
+    )
+
+    # Ambil kolom sesuai tahun
+    col_idx = [
+        i for i, c in enumerate(fin.columns)
+        if c.year == selected_year
+    ][0]
+
+    latest = fin.iloc[:, col_idx].fillna(0)
 
     def val(k):
         return float(latest.get(k, 0))
 
     company_name = getattr(stock_analysis, "company_name", "Income Flow")
 
+    # =============================
+    # DATA UTAMA
+    # =============================
     total_revenue = val("Total Revenue")
     cost_of_revenue = val("Cost Of Revenue")
     gross_profit = val("Gross Profit")
@@ -873,9 +906,8 @@ def create_sankey_chart(stock_analysis):
     interest = val("Interest Expense")
     net_income = val("Net Income")
 
-    # Jika data utama kosong → jangan render
     if total_revenue == 0:
-        st.warning("⚠️ Data financial tidak tersedia untuk Sankey Chart")
+        st.warning(f"⚠️ Data {selected_year} tidak lengkap")
         return
 
     # =============================
@@ -897,19 +929,10 @@ def create_sankey_chart(stock_analysis):
     ]
 
     # =============================
-    # NODE POSITION (ANTI TABRAKAN)
+    # NODE POSITION
     # =============================
     x = [0.0, 0.2, 0.2, 0.4, 0.4, 0.6, 0.6, 0.8]
-    y = [
-        0.50,  # Revenue
-        0.75,  # Cost
-        0.35,  # Gross
-        0.75,  # Opex
-        0.35,  # Op Income
-        0.65,  # Tax
-        0.80,  # Interest
-        0.35   # Net Income
-    ]
+    y = [0.50, 0.75, 0.35, 0.75, 0.35, 0.65, 0.80, 0.35]
 
     # =============================
     # BUILD SANKEY
@@ -941,20 +964,20 @@ def create_sankey_chart(stock_analysis):
                 net_income
             ],
             color=[
-                "rgba(220,53,69,0.55)",  # Cost
-                "rgba(40,167,69,0.55)",  # Gross
-                "rgba(220,53,69,0.55)",  # Opex
-                "rgba(40,167,69,0.55)",  # Op Income
-                "rgba(220,53,69,0.55)",  # Tax
-                "rgba(220,53,69,0.55)",  # Interest
-                "rgba(40,167,69,0.55)",  # Net
+                "rgba(220,53,69,0.55)",
+                "rgba(40,167,69,0.55)",
+                "rgba(220,53,69,0.55)",
+                "rgba(40,167,69,0.55)",
+                "rgba(220,53,69,0.55)",
+                "rgba(220,53,69,0.55)",
+                "rgba(40,167,69,0.55)"
             ]
         )
     ))
 
     fig.update_layout(
         title=dict(
-            text=f"Income Flow Sankey – {company_name}",
+            text=f"Income Flow Sankey – {company_name} ({selected_year})",
             x=0.5
         ),
         font=dict(size=12),
@@ -963,7 +986,7 @@ def create_sankey_chart(stock_analysis):
     )
 
     # =============================
-    # RENDER STREAMLIT
+    # RENDER
     # =============================
     st.plotly_chart(fig, use_container_width=True)
     
@@ -1262,7 +1285,7 @@ elif st.session_state.page == "Detail":
                 data = analyze_stock(ticker, period, interval)
             
             render_stock_result(data.results, data)
-            create_sankey_chart(data)
+            
         except Exception:
             st.error("🚦 Terlalu banyak request ke Yahoo Finance. Coba lagi nanti.")
 
